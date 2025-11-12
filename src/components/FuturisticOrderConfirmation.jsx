@@ -9,6 +9,8 @@ const FuturisticOrderConfirmation = () => {
   const [animationStage, setAnimationStage] = useState(0);
   const [emailStatus, setEmailStatus] = useState({ emailsSent: 0, emailErrors: [] });
   const [missedCallStatus, setMissedCallStatus] = useState(null);
+  const [isProcessingNotifications, setIsProcessingNotifications] = useState(false);
+  const [showNotificationPopup, setShowNotificationPopup] = useState(false);
 
   // Extract order data from URL params
   const urlParams = new URLSearchParams(location.search);
@@ -133,20 +135,26 @@ const FuturisticOrderConfirmation = () => {
             // since the user was already redirected here after successful payment
             console.log(`📧 Proceeding with notifications for confirmed order: ${orderIdToUse}`);
             
-            // Use a more reliable API call structure with order data from ref (Comment 1: Modified)
+            // Trigger email notifications immediately after successful payment (Razorpay)
             try {
-              const response = await api.post('/payment/cashfree-success', {
+              setIsProcessingNotifications(true);
+              setShowNotificationPopup(true);
+              console.log(`📧 Triggering email notifications for Razorpay payment...`);
+              
+              // Check if payment was already verified (from Razorpay handler)
+              const response = await api.post('/payment/razorpay/verify', {
+                razorpay_order_id: paymentIdFromUrl || 'order_confirmation_direct',
+                razorpay_payment_id: paymentIdFromUrl || 'payment_confirmation_direct',
+                razorpay_signature: 'confirmation_page_trigger', // Placeholder for direct confirmation
                 orderId: orderIdToUse,
-                paymentId: paymentIdFromUrl || 'manual_confirmation',
                 orderData: parsedOrderDataRef.current // Use ref instead of localStorage (Comment 3)
               });
               
-              console.log(`✅ Background processing completed`);
+              console.log(`✅ Email notification processing completed`);
               
               if (response.data && response.data.success) {
                 console.log(`📧 Emails sent: ${response.data.emailsSent || 0}`);
                 console.log(`📞 Missed call: ${response.data.missedCallStatus || 'pending'}`);
-                console.log(`📦 Data source: ${response.data.dataSource || 'unknown'}`);
                 
                 setEmailStatus({
                   emailsSent: response.data.emailsSent || 0,
@@ -154,23 +162,27 @@ const FuturisticOrderConfirmation = () => {
                 });
                 setMissedCallStatus(response.data.missedCallStatus);
                 notificationSuccess = true;
+                setIsProcessingNotifications(false);
               } else {
-                console.warn('⚠️ Background processing response incomplete');
+                console.warn('⚠️ Notification processing response incomplete');
+                setIsProcessingNotifications(false);
               }
             } catch (apiError) {
-              console.error('❌ Background processing API error:', apiError.message);
+              console.error('❌ Email notification API error:', apiError.message);
               
               // RETRY MECHANISM - Use ref data for retry (Comment 10)
-              console.log(`🔄 Retrying notification with cached ref data`);
+              console.log(`🔄 Retrying email notifications with cached ref data`);
               try {
-                const fallbackResponse = await api.post('/payment/cashfree-success', {
+                const fallbackResponse = await api.post('/payment/razorpay/verify', {
+                  razorpay_order_id: 'fallback_order',
+                  razorpay_payment_id: 'fallback_payment',
+                  razorpay_signature: 'fallback_signature',
                   orderId: orderIdToUse,
-                  paymentId: 'fallback_confirmation',
                   orderData: parsedOrderDataRef.current // Use ref for retry (Comment 10)
                 });
                 
                 if (fallbackResponse.data && fallbackResponse.data.success) {
-                  console.log(`✅ Fallback notification successful`);
+                  console.log(`✅ Fallback email notification successful`);
                   setEmailStatus({
                     emailsSent: fallbackResponse.data.emailsSent || 0,
                     emailErrors: fallbackResponse.data.emailErrors || []
@@ -179,7 +191,9 @@ const FuturisticOrderConfirmation = () => {
                   notificationSuccess = true;
                 }
               } catch (fallbackError) {
-                console.error('❌ Fallback notification also failed:', fallbackError.message);
+                console.error('❌ Fallback email notification also failed:', fallbackError.message);
+              } finally {
+                setIsProcessingNotifications(false);
               }
             } finally {
               // Only cleanup localStorage after notification attempts complete (Comment 2)
@@ -272,13 +286,15 @@ const FuturisticOrderConfirmation = () => {
           
           // SAFETY CHECK: If no emails sent after 10 seconds, trigger again using ref (Comment 5: Order-scoped flag)
           if (response.data.emailsSent === 0 && !safetyRetriggerFlagRef.current && parsedOrderDataRef.current) {
-            console.log(`🔄 No emails detected after polling, retriggering notifications`);
+            console.log(`🔄 No emails detected after polling, retriggering notifications via Razorpay`);
             safetyRetriggerFlagRef.current = true; // Prevent multiple retriggers for this order (Comment 5)
             
             try {
-              const retriggerResponse = await api.post('/payment/cashfree-success', {
+              const retriggerResponse = await api.post('/payment/razorpay/verify', {
+                razorpay_order_id: 'safety_retrigger_order',
+                razorpay_payment_id: 'safety_retrigger_payment',
+                razorpay_signature: 'safety_retrigger_signature',
                 orderId: orderIdToUse,
-                paymentId: 'safety_retrigger',
                 orderData: parsedOrderDataRef.current // Use ref instead of state (Comment 10)
               });
               
@@ -348,39 +364,125 @@ const FuturisticOrderConfirmation = () => {
           </div>
         )}
 
-        {/* Email and missed call status notifications - Mobile responsive */}
-        <div className="fixed bottom-4 right-4 z-50 space-y-2 w-64 sm:w-72">
-          {emailStatus.emailsSent > 0 && (
-            <div className="bg-black/95 backdrop-blur-sm text-green-400 p-3 sm:p-4 rounded-lg flex items-start gap-2 sm:gap-3 font-mono text-xs sm:text-sm border border-green-400/30 shadow-xl animate-slideIn">
-          <Mail className="w-3 h-3 sm:w-4 sm:h-4 mt-1 animate-pulse flex-shrink-0" />
-          <div className="flex-1">
-            <div className="font-bold tracking-wide flex items-center gap-1 sm:gap-2 mb-1">
-              Notified
-              <span className="text-xs bg-green-400/20 px-1 sm:px-2 py-0.5 sm:py-1 rounded">
-            {emailStatus.emailsSent}/2
-              </span>
-            </div>
-            <div className="text-xs text-green-400/80">
-              {emailStatus.emailsSent === 1 
-            ? '→ Customer notified' 
-            : '→ Customer & vendor notified'}
-            </div>
-          </div>
-            </div>
-          )}
+        {/* Enhanced Email and Notification Status Sidebar - Right Bottom */}
+        {showNotificationPopup && (
+          <div className="fixed bottom-4 right-4 z-50 space-y-3 w-72 sm:w-80 max-w-[calc(100vw-2rem)]">
+            {/* Processing Notification Indicator */}
+            {isProcessingNotifications && (
+              <div className="bg-gradient-to-r from-yellow-500/20 to-green-500/20 backdrop-blur-md text-yellow-400 p-4 rounded-lg flex items-start gap-3 font-mono text-sm border border-yellow-400/50 shadow-2xl animate-slideInRight">
+                <Loader className="w-5 h-5 mt-0.5 animate-spin flex-shrink-0" />
+                <div className="flex-1">
+                  <div className="font-bold tracking-wide mb-1 flex items-center gap-2">
+                    SENDING NOTIFICATIONS
+                    <div className="flex gap-1">
+                      <div className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <div className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <div className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  </div>
+                  <div className="text-xs text-yellow-400/90">
+                    → Processing order emails...
+                  </div>
+                </div>
+              </div>
+            )}
 
-          {missedCallStatus === 'success' && (
-            <div className="bg-black/95 backdrop-blur-sm text-green-400 p-3 sm:p-4 rounded-lg flex items-start gap-2 sm:gap-3 font-mono text-xs sm:text-sm border border-green-400/30 shadow-xl animate-slideIn">
-          <Phone className="w-3 h-3 sm:w-4 sm:h-4 mt-1 animate-pulse flex-shrink-0" />
-          <div className="flex-1">
-            <div className="font-bold tracking-wide mb-1">MISSED CALL SENT</div>
-            <div className="text-xs text-green-400/80">
-              → Vendor notification sent
-            </div>
+            {/* Email Notification Success */}
+            {emailStatus.emailsSent > 0 && (
+              <div className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 backdrop-blur-md text-green-400 p-4 rounded-lg flex items-start gap-3 font-mono text-sm border border-green-400/50 shadow-2xl animate-slideInRight hover:scale-105 transition-transform duration-300">
+                <div className="relative">
+                  <Mail className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-green-400 rounded-full animate-ping" />
+                </div>
+                <div className="flex-1">
+                  <div className="font-bold tracking-wide flex items-center gap-2 mb-1">
+                    EMAIL NOTIFICATIONS
+                    <span className="text-xs bg-green-400/30 px-2 py-1 rounded border border-green-400/50">
+                      {emailStatus.emailsSent}/3
+                    </span>
+                  </div>
+                  <div className="text-xs text-green-400/90 space-y-1">
+                    {emailStatus.emailsSent >= 1 && (
+                      <div className="flex items-center gap-2">
+                        <Check className="w-3 h-3" />
+                        <span>Customer email sent ✓</span>
+                      </div>
+                    )}
+                    {emailStatus.emailsSent >= 2 && (
+                      <div className="flex items-center gap-2">
+                        <Check className="w-3 h-3" />
+                        <span>Vendor email sent ✓</span>
+                      </div>
+                    )}
+                    {emailStatus.emailsSent >= 3 && (
+                      <div className="flex items-center gap-2">
+                        <Check className="w-3 h-3" />
+                        <span>Admin notification sent ✓</span>
+                      </div>
+                    )}
+                  </div>
+                  {emailStatus.emailErrors && emailStatus.emailErrors.length > 0 && (
+                    <div className="text-xs text-red-400/80 mt-2">
+                      ⚠ {emailStatus.emailErrors.length} notification(s) failed
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Missed Call Success */}
+            {missedCallStatus === 'success' && (
+              <div className="bg-gradient-to-r from-blue-500/20 to-cyan-500/20 backdrop-blur-md text-cyan-400 p-4 rounded-lg flex items-start gap-3 font-mono text-sm border border-cyan-400/50 shadow-2xl animate-slideInRight hover:scale-105 transition-transform duration-300">
+                <div className="relative">
+                  <Phone className="w-5 h-5 mt-0.5 flex-shrink-0 animate-pulse" />
+                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-cyan-400 rounded-full animate-ping" />
+                </div>
+                <div className="flex-1">
+                  <div className="font-bold tracking-wide mb-1">VENDOR ALERT</div>
+                  <div className="text-xs text-cyan-400/90">
+                    <div className="flex items-center gap-2">
+                      <Check className="w-3 h-3" />
+                      <span>Missed call notification sent ✓</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Check your email reminder */}
+            {emailStatus.emailsSent > 0 && !isProcessingNotifications && (
+              <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 backdrop-blur-md text-purple-400 p-4 rounded-lg flex items-start gap-3 font-mono text-sm border border-purple-400/50 shadow-2xl animate-slideInRight">
+                <Mail className="w-5 h-5 mt-0.5 flex-shrink-0 animate-bounce" />
+                <div className="flex-1">
+                  <div className="font-bold tracking-wide mb-1">CHECK YOUR EMAIL</div>
+                  <div className="text-xs text-purple-400/90">
+                    → Order confirmation sent
+                    <div className="mt-1 text-purple-400/70">
+                      (Check spam folder if not in inbox)
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-            </div>
-          )}
-        </div>
+        )}
+
+        {/* Add custom animations */}
+        <style jsx>{`
+          @keyframes slideInRight {
+            from {
+              transform: translateX(100%);
+              opacity: 0;
+            }
+            to {
+              transform: translateX(0);
+              opacity: 1;
+            }
+          }
+          .animate-slideInRight {
+            animation: slideInRight 0.5s ease-out forwards;
+          }
+        `}</style>
 
         {/* Main content - only show after processing is complete */}
       {!isProcessingPayment && (
