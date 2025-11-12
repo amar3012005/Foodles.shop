@@ -236,38 +236,104 @@ const WaitingRoom = () => {
         return; // Abort payment redirect
       }
 
-      // Get the appropriate payment form URL based on amount
-      console.log(`💳 Fetching payment form for amount: ₹${remainingPayment}`);
-      const paymentFormResponse = await api.get(`/api/payment-form/${remainingPayment}`);
-      
-      if (!paymentFormResponse.data.success) {
-        throw new Error('Failed to get payment form URL');
+      // Create Razorpay order
+      console.log(`💳 Creating Razorpay order for amount: ₹${remainingPayment}`);
+      const razorpayOrderResponse = await api.post('/payment/razorpay/create-order', {
+        amount: remainingPayment,
+        orderId: orderId,
+        userDetails: userDetails
+      });
+
+      if (!razorpayOrderResponse.data.success) {
+        throw new Error('Failed to create Razorpay order');
       }
-      
-      const paymentFormUrl = paymentFormResponse.data.paymentFormUrl;
-      console.log(`✅ Payment form URL received: ${paymentFormUrl}`);
 
-      // Construct Cashfree payment URL with order data
-      const cashfreeUrl = new URL(paymentFormUrl);
-      
-      // Add order details as URL parameters
-      cashfreeUrl.searchParams.append('order_id', orderId);
-      cashfreeUrl.searchParams.append('amount', remainingPayment);
-      cashfreeUrl.searchParams.append('customer_name', userDetails.fullName);
-      cashfreeUrl.searchParams.append('customer_email', userDetails.email);
-      cashfreeUrl.searchParams.append('customer_phone', userDetails.phoneNumber);
-      
-      // Simplified return URL - rely on backend verification and polling (Comment 2)
-      // Don't use unsupported placeholders like {payment_id} and {status}
-      // Instead, the confirmation page will poll /payment/status/:orderId
-      // Add a payment_success flag to indicate user returned from payment gateway
-      // HARDCODE localhost return URL for development to override Cashfree form settings
-      const returnUrl = `http://localhost:3000/order-confirmation?order_id=${orderId}&payment_success=true`;
-      cashfreeUrl.searchParams.append('return_url', returnUrl);
+      const { razorpayOrderId, key } = razorpayOrderResponse.data;
+      console.log(`✅ Razorpay order created: ${razorpayOrderId}`);
 
-      console.log(`💳 Redirecting to payment gateway with order: ${orderId}`);
-      // Redirect to Cashfree payment form
-      window.location.href = cashfreeUrl.toString();
+      // Load Razorpay checkout script if not already loaded
+      if (!window.Razorpay) {
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.async = true;
+        document.body.appendChild(script);
+        
+        await new Promise((resolve, reject) => {
+          script.onload = resolve;
+          script.onerror = reject;
+        });
+        console.log(`✅ Razorpay script loaded`);
+      }
+
+      // Razorpay checkout options
+      const options = {
+        key: key,
+        amount: remainingPayment * 100, // Convert to paise
+        currency: 'INR',
+        name: 'Foodles',
+        description: `Order #${orderId}`,
+        order_id: razorpayOrderId,
+        prefill: {
+          name: userDetails.fullName,
+          email: userDetails.email,
+          contact: userDetails.phoneNumber
+        },
+        notes: {
+          orderId: orderId,
+          restaurantName: restaurantName
+        },
+        theme: {
+          color: '#FFD700'
+        },
+        handler: async function (response) {
+          // Payment successful
+          console.log('✅ Payment successful:', response);
+          
+          try {
+            setIsProcessingPayment(true);
+            console.log(`🔐 Verifying payment on backend...`);
+            
+            // Verify payment on backend
+            const verifyResponse = await api.post('/payment/razorpay/verify', {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              orderId: orderId,
+              orderData: orderData
+            });
+
+            if (verifyResponse.data.success && verifyResponse.data.verified) {
+              console.log(`✅ Payment verified successfully`);
+              // Redirect to confirmation page
+              window.location.href = `/order-confirmation?order_id=${orderId}&payment_success=true`;
+            } else {
+              throw new Error('Payment verification failed');
+            }
+          } catch (error) {
+            console.error('❌ Verification failed:', error);
+            setIsProcessingPayment(false);
+            alert('Payment verification failed. Please contact support with order ID: ' + orderId);
+          }
+        },
+        modal: {
+          ondismiss: function() {
+            console.log('⚠️ Payment cancelled by user');
+            setIsProcessingPayment(false);
+            alert('Payment cancelled. Your order is still pending.');
+          }
+        }
+      };
+
+      const paymentObject = new window.Razorpay(options);
+      
+      paymentObject.on('payment.failed', function (response) {
+        console.error('❌ Payment failed:', response.error);
+        setIsProcessingPayment(false);
+        alert(`Payment failed: ${response.error.description}`);
+      });
+
+      paymentObject.open();
+      setIsProcessingPayment(false); // Remove loading since modal will open
 
     } catch (error) {
       console.error('❌ Payment preparation failed:', error);
