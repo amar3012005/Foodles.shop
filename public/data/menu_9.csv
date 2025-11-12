@@ -1,0 +1,11 @@
+id,name,description,price,category
+1,Test Burger,A delicious test burger for testing purposes,50,Test Items
+2,Test Pizza,A test pizza with various toppings,80,Test Items
+3,Test Pasta,Creamy test pasta dish,60,Test Items
+4,Test Salad,Fresh test salad,40,Test Items
+5,Test Drink,Refreshing test beverage,30,Test Items
+6,Test Dessert,Sweet test dessert,45,Test Items
+7,Test Sandwich,Test sandwich with fillings,35,Test Items
+8,Test Soup,Hot test soup,25,Test Items
+9,Test Fries,Crispy test fries,20,Test Items
+10,Test Ice Cream,Cold test ice cream,40,Test Items
