@@ -4,7 +4,7 @@ import axios from 'axios';
 const API_URL = process.env.REACT_APP_BACKEND_URL || 
   (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? 'http://localhost:5000'  // Local development
-    : 'https://foodles-backend-lpzp.onrender.com'); // Production backend
+    : 'https://api.foodles.shop'); // Production backend
 
 const api = axios.create({
   baseURL: API_URL,

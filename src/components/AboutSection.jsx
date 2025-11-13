@@ -218,9 +218,10 @@ const AboutSection = () => {
   const manualCloseRef = useRef(false);
 
   // Add API endpoint config
-  const API_URL = process.env.NODE_ENV === 'production'
-    ? 'https://foodles-backend-lpzp.onrender.com'
-    : 'http://localhost:5000';
+  const API_URL = process.env.REACT_APP_BACKEND_URL || 
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      ? 'http://localhost:5000'  // Local development
+      : 'https://api.foodles.shop'); // Production backend
 
   useEffect(() => {
     setIsLoaded(true);
@@ -331,9 +332,11 @@ const AboutSection = () => {
 
   // Modify WebSocket connection handling (use refs for attempts and timers)
   const connectWebSocket = useCallback(() => {
-    const wsUrl = process.env.NODE_ENV === 'production'
-      ? 'wss://foodles-backend-lpzp.onrender.com'
-      : 'ws://localhost:5000';
+    const wsUrl = process.env.REACT_APP_BACKEND_URL 
+      ? process.env.REACT_APP_BACKEND_URL.replace(/^http/, 'ws')
+      : (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+          ? 'ws://localhost:5000'
+          : 'wss://api.foodles.shop');
 
     // If an existing socket exists, ensure it's cleaned up first
     if (wsRef.current) {
