@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { MessageSquare, AlertCircle, Info, X } from 'lucide-react'; // Add Info import
+import api from '../config/api';
 
 const PersonalInfo = () => {
   const navigate = useNavigate();
@@ -108,6 +109,36 @@ const PersonalInfo = () => {
     }
 
     setIsLoading(true);
+
+    // Save phone number to localStorage and sessionStorage for order history
+    const phoneData = {
+      phoneNumber: userDetails.phoneNumber,
+      savedAt: new Date().toISOString(),
+      userName: userDetails.fullName,
+      userEmail: userDetails.email
+    };
+    
+    localStorage.setItem('userPhoneNumber', userDetails.phoneNumber);
+    localStorage.setItem('userOrderData', JSON.stringify(phoneData));
+    sessionStorage.setItem('userPhoneNumber', userDetails.phoneNumber);
+
+    // BACKEND TRIGGER: Sync phone number with backend when NEXT is pressed
+    try {
+      const syncResponse = await api.post('/api/sync-phone-number', {
+        phoneNumber: userDetails.phoneNumber,
+        userName: userDetails.fullName,
+        userEmail: userDetails.email,
+        source: 'personal_info_next'
+      });
+
+      if (syncResponse.data.success) {
+        // Phone number synced successfully
+      } else {
+        // Phone sync failed - continue with order flow
+      }
+    } catch (syncError) {
+      // Backend phone sync error - continue with order flow
+    }
 
     // Navigate to the next page
     navigate('/waiting-room', {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Check, Mail, Phone, Loader } from 'lucide-react';
+import { Check, Mail, Phone } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../config/api';
 
@@ -9,7 +9,6 @@ const FuturisticOrderConfirmation = () => {
   const [animationStage, setAnimationStage] = useState(0);
   const [emailStatus, setEmailStatus] = useState({ emailsSent: 0, emailErrors: [] });
   const [missedCallStatus, setMissedCallStatus] = useState(null);
-  const [isProcessingNotifications, setIsProcessingNotifications] = useState(false);
   const [showNotificationPopup, setShowNotificationPopup] = useState(false);
 
   // Extract order data from URL params
@@ -22,7 +21,6 @@ const FuturisticOrderConfirmation = () => {
   // State for order details and processing stages
   const [orderData, setOrderData] = useState(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(true); // Start with processing screen
-  const [loading, setLoading] = useState(false); // No loading after processing
   
   // Use ref to store parsed order data for retries (Comments 1, 3, 10)
   const parsedOrderDataRef = useRef(null);
@@ -31,13 +29,10 @@ const FuturisticOrderConfirmation = () => {
   
   // Extract order data with correct paths based on localStorage structure (Comment 1)
   const extractedOrderId = orderIdFromUrl || orderData?.orderId || sessionStorage.getItem('lastOrderId') || ''; // Comment 6: Fallback to sessionStorage
-  const extractedTotal = orderData?.totalOrderValue || orderData?.paymentBreakdown?.total || 0;
   const extractedName = orderData?.userDetails?.fullName || 'Valued Customer';
   const extractedRemainingPayment = orderData?.orderDetails?.remainingPayment || orderData?.amount || orderData?.paymentBreakdown?.remainingPayment || 0;
   const extractedDeliveryTime = orderData?.orderDetails?.deliveryTime || '30-40';
   const extractedRestaurantName = orderData?.restaurantName || '';
-  const extractedVendorPhone = orderData?.vendorPhone || '';
-  const extractedVendorEmail = orderData?.vendorEmail || '';
   const isPreReservation = orderData?.orderDetails?.isPreReservation || false;
 
   // Fix the initial timer value to 45
@@ -46,7 +41,6 @@ const FuturisticOrderConfirmation = () => {
   // Reset retrigger flag when orderId changes (Comment 5)
   useEffect(() => {
     safetyRetriggerFlagRef.current = false;
-    console.log(`🔄 Reset safety retrigger flag for order: ${extractedOrderId}`);
   }, [extractedOrderId]);
 
   useEffect(() => {
@@ -56,21 +50,13 @@ const FuturisticOrderConfirmation = () => {
         setIsProcessingPayment(false);
         
         const orderIdToUse = orderIdFromUrl || extractedOrderId;
-        console.log(`🔍 Processing order confirmation for: ${orderIdToUse}`);
-        console.log(`📍 URL Parameters:`, {
-          orderIdFromUrl,
-          paymentIdFromUrl,
-          statusFromUrl,
-          paymentSuccessFlag,
-          extractedOrderId
-        });
-        
+
         if (!orderIdToUse) {
           console.error('❌ No order ID found');
           // Try to get from sessionStorage as fallback
           const fallbackOrderId = sessionStorage.getItem('lastOrderId');
           if (fallbackOrderId) {
-            console.log(`✅ Found order ID in sessionStorage: ${fallbackOrderId}`);
+            // Found order ID in sessionStorage
           }
         }
 
@@ -81,8 +67,7 @@ const FuturisticOrderConfirmation = () => {
           // Debug: Check all localStorage keys
           const allKeys = Object.keys(localStorage);
           const orderKeys = allKeys.filter(key => key.startsWith('order_'));
-          console.log(`📦 Found ${orderKeys.length} order(s) in localStorage`);
-          
+
           let cachedOrderData = null;
           
           if (localStorageKey) {
@@ -93,54 +78,42 @@ const FuturisticOrderConfirmation = () => {
           if (cachedOrderData) {
             // Parse and store in ref for retries (Comment 3, 10)
             parsedOrderDataRef.current = JSON.parse(cachedOrderData);
-            console.log(`✅ Order data loaded for: ${parsedOrderDataRef.current.userDetails?.fullName}`);
-            
+
             // Set state with the full orderData object (Comment 1)
             setOrderData(parsedOrderDataRef.current);
-            
+
             // DON'T clean up localStorage yet - defer until after notifications succeed (Comment 2)
-            console.log(`💾 localStorage retained for notification processing`);
           } else if (orderKeys.length > 0) {
             // Fallback: Use any available order key
-            console.log(`🔄 Using fallback order data`);
             const fallbackData = localStorage.getItem(orderKeys[0]);
             if (fallbackData) {
               parsedOrderDataRef.current = JSON.parse(fallbackData);
               localStorageKeyRef.current = orderKeys[0];
-              console.log(`✅ Fallback order data loaded`);
-              
+
               setOrderData(parsedOrderDataRef.current);
-              
+
               // DON'T clean up localStorage yet (Comment 2)
-              console.log(`💾 localStorage retained for notification processing`);
             }
           } else {
             console.warn('❌ No order data found in localStorage');
-          }
-          
-          // Always trigger background processing for emails and notifications
+          }          // Always trigger background processing for emails and notifications
           if (orderIdToUse && parsedOrderDataRef.current) {
-            console.log(`📧 Triggering email and notification processing with cached data`);
-            console.log(`💳 Payment success flag: ${paymentSuccessFlag}`);
-            
+
             let notificationSuccess = false;
-            
+
             // If user returned from payment gateway, assume payment is successful
             // This works around the lack of real-time payment verification
             if (paymentSuccessFlag === 'true') {
-              console.log(`✅ User returned from payment gateway - proceeding with notifications without verification`);
+              // User returned from payment gateway - proceeding with notifications
             }
-            
+
             // For order confirmation page, skip payment verification and proceed directly with notifications
             // since the user was already redirected here after successful payment
-            console.log(`📧 Proceeding with notifications for confirmed order: ${orderIdToUse}`);
-            
+
             // Trigger email notifications immediately after successful payment (Razorpay)
             try {
-              setIsProcessingNotifications(true);
               setShowNotificationPopup(true);
-              console.log(`📧 Triggering email notifications for Razorpay payment...`);
-              
+
               // Check if payment was already verified (from Razorpay handler)
               const response = await api.post('/payment/razorpay/verify', {
                 razorpay_order_id: paymentIdFromUrl || 'order_confirmation_direct',
@@ -149,29 +122,21 @@ const FuturisticOrderConfirmation = () => {
                 orderId: orderIdToUse,
                 orderData: parsedOrderDataRef.current // Use ref instead of localStorage (Comment 3)
               });
-              
-              console.log(`✅ Email notification processing completed`);
-              
+
               if (response.data && response.data.success) {
-                console.log(`📧 Emails sent: ${response.data.emailsSent || 0}`);
-                console.log(`📞 Missed call: ${response.data.missedCallStatus || 'pending'}`);
-                
                 setEmailStatus({
                   emailsSent: response.data.emailsSent || 0,
                   emailErrors: response.data.emailErrors || []
                 });
                 setMissedCallStatus(response.data.missedCallStatus);
                 notificationSuccess = true;
-                setIsProcessingNotifications(false);
               } else {
                 console.warn('⚠️ Notification processing response incomplete');
-                setIsProcessingNotifications(false);
               }
             } catch (apiError) {
               console.error('❌ Email notification API error:', apiError.message);
-              
+
               // RETRY MECHANISM - Use ref data for retry (Comment 10)
-              console.log(`🔄 Retrying email notifications with cached ref data`);
               try {
                 const fallbackResponse = await api.post('/payment/razorpay/verify', {
                   razorpay_order_id: 'fallback_order',
@@ -180,9 +145,8 @@ const FuturisticOrderConfirmation = () => {
                   orderId: orderIdToUse,
                   orderData: parsedOrderDataRef.current // Use ref for retry (Comment 10)
                 });
-                
+
                 if (fallbackResponse.data && fallbackResponse.data.success) {
-                  console.log(`✅ Fallback email notification successful`);
                   setEmailStatus({
                     emailsSent: fallbackResponse.data.emailsSent || 0,
                     emailErrors: fallbackResponse.data.emailErrors || []
@@ -192,23 +156,19 @@ const FuturisticOrderConfirmation = () => {
                 }
               } catch (fallbackError) {
                 console.error('❌ Fallback email notification also failed:', fallbackError.message);
-              } finally {
-                setIsProcessingNotifications(false);
               }
             } finally {
               // Only cleanup localStorage after notification attempts complete (Comment 2)
               if (localStorageKeyRef.current) {
                 setTimeout(() => {
                   localStorage.removeItem(localStorageKeyRef.current);
-                  console.log(`🧹 localStorage cleaned after notification processing`);
                 }, 2000); // Small delay to ensure all requests complete
               }
-              
+
               // Cleanup sessionStorage lastOrderId after successful completion (Comment 6)
               if (notificationSuccess && sessionStorage.getItem('lastOrderId')) {
                 setTimeout(() => {
                   sessionStorage.removeItem('lastOrderId');
-                  console.log(`🧹 sessionStorage lastOrderId cleaned`);
                 }, 2000);
               }
             }
@@ -237,7 +197,7 @@ const FuturisticOrderConfirmation = () => {
   // Separate effect for countdown timer
   useEffect(() => {
     // Start countdown only after processing is complete
-    if (!isProcessingPayment && !loading) {
+    if (!isProcessingPayment) {
       const countdownInterval = setInterval(() => {
         setTimeToRedirect((prev) => {
           // When timer reaches 0, navigate to home
@@ -251,7 +211,7 @@ const FuturisticOrderConfirmation = () => {
 
       return () => clearInterval(countdownInterval);
     }
-  }, [navigate, isProcessingPayment, loading]);
+  }, [navigate, isProcessingPayment]);
 
   useEffect(() => {
     const stages = setTimeout(() => {
@@ -264,7 +224,7 @@ const FuturisticOrderConfirmation = () => {
   useEffect(() => {
     const checkStatus = async () => {
       const orderIdToUse = extractedOrderId || orderIdFromUrl;
-      if (!orderIdToUse || isProcessingPayment || loading) return;
+      if (!orderIdToUse || isProcessingPayment) return;
       
       try {
         const response = await api.get(`/email-status/${orderIdToUse}`);
@@ -286,9 +246,8 @@ const FuturisticOrderConfirmation = () => {
           
           // SAFETY CHECK: If no emails sent after 10 seconds, trigger again using ref (Comment 5: Order-scoped flag)
           if (response.data.emailsSent === 0 && !safetyRetriggerFlagRef.current && parsedOrderDataRef.current) {
-            console.log(`🔄 No emails detected after polling, retriggering notifications via Razorpay`);
             safetyRetriggerFlagRef.current = true; // Prevent multiple retriggers for this order (Comment 5)
-            
+
             try {
               const retriggerResponse = await api.post('/payment/razorpay/verify', {
                 razorpay_order_id: 'safety_retrigger_order',
@@ -297,9 +256,8 @@ const FuturisticOrderConfirmation = () => {
                 orderId: orderIdToUse,
                 orderData: parsedOrderDataRef.current // Use ref instead of state (Comment 10)
               });
-              
+
               if (retriggerResponse.data && retriggerResponse.data.success) {
-                console.log(`✅ Safety retrigger successful: ${retriggerResponse.data.emailsSent} emails`);
                 setEmailStatus({
                   emailsSent: retriggerResponse.data.emailsSent || 0,
                   emailErrors: retriggerResponse.data.emailErrors || []
@@ -324,7 +282,7 @@ const FuturisticOrderConfirmation = () => {
       const pollInterval = setInterval(checkStatus, 2000); // Poll every 2 seconds instead of 1
       return () => clearInterval(pollInterval);
     }
-  }, [extractedOrderId, orderIdFromUrl, isProcessingPayment, loading]);
+  }, [extractedOrderId, orderIdFromUrl, isProcessingPayment]);
 
   return (
     <div className="bg-black h-screen fixed inset-0 p-4">
@@ -336,7 +294,7 @@ const FuturisticOrderConfirmation = () => {
       {isProcessingPayment && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center">
           <div className="text-center">
-            <Loader className="w-16 h-16 text-green-400 animate-spin mb-6" />
+            <div className="w-16 h-16 border-4 border-green-400/20 border-t-green-400 rounded-full animate-spin mb-6" />
             <div className="font-mono text-white space-y-3">
               <h3 className="text-2xl tracking-wide">PROCESSING PAYMENT</h3>
               <p className="text-green-400 text-lg">Payment Successful!</p>
@@ -351,10 +309,10 @@ const FuturisticOrderConfirmation = () => {
         </div>
       )}
 
-      /* Show loading while fetching order details (if needed) */
-        {loading && !isProcessingPayment && (
-          <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center">
-            <div className="text-center">
+      {/* Show loading while fetching order details (if needed) */}
+      {false && !isProcessingPayment && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="text-center">
           <div className="w-12 h-12 border-4 border-green-400/20 border-t-green-400 rounded-full animate-spin mb-4" />
           <div className="font-mono text-white space-y-2">
             <h3 className="text-xl">Loading Order Details</h3>
@@ -364,125 +322,32 @@ const FuturisticOrderConfirmation = () => {
           </div>
         )}
 
-        {/* Enhanced Email and Notification Status Sidebar - Right Bottom */}
+        {/* Minimal Notification Popup */}
         {showNotificationPopup && (
-          <div className="fixed bottom-4 right-4 z-50 space-y-3 w-72 sm:w-80 max-w-[calc(100vw-2rem)]">
-            {/* Processing Notification Indicator */}
-            {isProcessingNotifications && (
-              <div className="bg-gradient-to-r from-yellow-500/20 to-green-500/20 backdrop-blur-md text-yellow-400 p-4 rounded-lg flex items-start gap-3 font-mono text-sm border border-yellow-400/50 shadow-2xl animate-slideInRight">
-                <Loader className="w-5 h-5 mt-0.5 animate-spin flex-shrink-0" />
-                <div className="flex-1">
-                  <div className="font-bold tracking-wide mb-1 flex items-center gap-2">
-                    SENDING NOTIFICATIONS
-                    <div className="flex gap-1">
-                      <div className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <div className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <div className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                    </div>
-                  </div>
-                  <div className="text-xs text-yellow-400/90">
-                    → Processing order emails...
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Email Notification Success */}
+          <div className="fixed bottom-4 right-4 z-50 space-y-2">
+            {/* Email Notification Count */}
             {emailStatus.emailsSent > 0 && (
-              <div className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 backdrop-blur-md text-green-400 p-4 rounded-lg flex items-start gap-3 font-mono text-sm border border-green-400/50 shadow-2xl animate-slideInRight hover:scale-105 transition-transform duration-300">
-                <div className="relative">
-                  <Mail className="w-5 h-5 mt-0.5 flex-shrink-0" />
-                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-green-400 rounded-full animate-ping" />
-                </div>
-                <div className="flex-1">
-                  <div className="font-bold tracking-wide flex items-center gap-2 mb-1">
-                    EMAIL NOTIFICATIONS
-                    <span className="text-xs bg-green-400/30 px-2 py-1 rounded border border-green-400/50">
-                      {emailStatus.emailsSent}/3
-                    </span>
-                  </div>
-                  <div className="text-xs text-green-400/90 space-y-1">
-                    {emailStatus.emailsSent >= 1 && (
-                      <div className="flex items-center gap-2">
-                        <Check className="w-3 h-3" />
-                        <span>Customer email sent ✓</span>
-                      </div>
-                    )}
-                    {emailStatus.emailsSent >= 2 && (
-                      <div className="flex items-center gap-2">
-                        <Check className="w-3 h-3" />
-                        <span>Vendor email sent ✓</span>
-                      </div>
-                    )}
-                    {emailStatus.emailsSent >= 3 && (
-                      <div className="flex items-center gap-2">
-                        <Check className="w-3 h-3" />
-                        <span>Admin notification sent ✓</span>
-                      </div>
-                    )}
-                  </div>
-                  {emailStatus.emailErrors && emailStatus.emailErrors.length > 0 && (
-                    <div className="text-xs text-red-400/80 mt-2">
-                      ⚠ {emailStatus.emailErrors.length} notification(s) failed
-                    </div>
-                  )}
+              <div className="bg-green-500/20 backdrop-blur-md text-green-400 px-3 py-2 rounded-lg font-mono text-sm border border-green-400/50">
+                <div className="flex items-center gap-2">
+                  <Mail className="w-4 h-4" />
+                  <span>emails sent ({emailStatus.emailsSent})</span>
                 </div>
               </div>
             )}
 
-            {/* Missed Call Success */}
+            {/* Vendor Notified */}
             {missedCallStatus === 'success' && (
-              <div className="bg-gradient-to-r from-blue-500/20 to-cyan-500/20 backdrop-blur-md text-cyan-400 p-4 rounded-lg flex items-start gap-3 font-mono text-sm border border-cyan-400/50 shadow-2xl animate-slideInRight hover:scale-105 transition-transform duration-300">
-                <div className="relative">
-                  <Phone className="w-5 h-5 mt-0.5 flex-shrink-0 animate-pulse" />
-                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-cyan-400 rounded-full animate-ping" />
-                </div>
-                <div className="flex-1">
-                  <div className="font-bold tracking-wide mb-1">VENDOR ALERT</div>
-                  <div className="text-xs text-cyan-400/90">
-                    <div className="flex items-center gap-2">
-                      <Check className="w-3 h-3" />
-                      <span>Missed call notification sent ✓</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Check your email reminder */}
-            {emailStatus.emailsSent > 0 && !isProcessingNotifications && (
-              <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 backdrop-blur-md text-purple-400 p-4 rounded-lg flex items-start gap-3 font-mono text-sm border border-purple-400/50 shadow-2xl animate-slideInRight">
-                <Mail className="w-5 h-5 mt-0.5 flex-shrink-0 animate-bounce" />
-                <div className="flex-1">
-                  <div className="font-bold tracking-wide mb-1">CHECK YOUR EMAIL</div>
-                  <div className="text-xs text-purple-400/90">
-                    → Order confirmation sent
-                    <div className="mt-1 text-purple-400/70">
-                      (Check spam folder if not in inbox)
-                    </div>
-                  </div>
+              <div className="bg-blue-500/20 backdrop-blur-md text-blue-400 px-3 py-2 rounded-lg font-mono text-sm border border-blue-400/50">
+                <div className="flex items-center gap-2">
+                  <Phone className="w-4 h-4" />
+                  <span>[vendor notified]</span>
                 </div>
               </div>
             )}
           </div>
         )}
 
-        {/* Add custom animations */}
-        <style jsx>{`
-          @keyframes slideInRight {
-            from {
-              transform: translateX(100%);
-              opacity: 0;
-            }
-            to {
-              transform: translateX(0);
-              opacity: 1;
-            }
-          }
-          .animate-slideInRight {
-            animation: slideInRight 0.5s ease-out forwards;
-          }
-        `}</style>
+
 
         {/* Main content - only show after processing is complete */}
       {!isProcessingPayment && (
@@ -532,7 +397,7 @@ const FuturisticOrderConfirmation = () => {
 
           <div className="text-sm font-mono text-green-400/80 mb-3">
             ORDER_ID: <span className="text-white/70">#{extractedOrderId || 'Processing...'}</span>
-            {!loading && !isProcessingPayment && (
+            {!isProcessingPayment && (
               <div className="text-xs text-white/50 mt-2">
                 Redirecting to home in {timeToRedirect} seconds...
               </div>

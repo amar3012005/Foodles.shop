@@ -21,7 +21,6 @@ const handlePayment = async () => {
       },
       modal: {
         ondismiss: () => {
-          console.log('Payment cancelled by user');
           navigate('/payment-failure', {
             state: {
               amount: totalAmount,

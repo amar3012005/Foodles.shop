@@ -1,4 +1,4 @@
-import React from 'react';
+import { useEffect } from 'react';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import Homepage from './components/Homepage';
 import Menu from './components/Menu';
@@ -16,6 +16,8 @@ import FuturisticOrderConfirmation from './components/FuturisticOrderConfirmatio
 import CashfreeResponse from './components/CashfreeResponse';
 import Terms from './components/Terms';
 import CampusSelection from './components/campus';
+import OrderHistory from './components/OrderHistory';
+import api from './config/api';
 
 
 const Layout = ({ children }) => (
@@ -28,6 +30,70 @@ const Layout = ({ children }) => (
 );
 
 function App() {
+  // Fetch phone number from localStorage when app loads
+  useEffect(() => {
+    const fetchStoredPhoneNumber = async () => {
+      try {
+
+        // Get phone number from localStorage
+        let storedPhone = localStorage.getItem('userPhoneNumber');
+        let userName = '';
+        let userEmail = '';
+
+        // Fallback to sessionStorage
+        if (!storedPhone) {
+          storedPhone = sessionStorage.getItem('userPhoneNumber');
+        }
+
+        // Fallback to cached user data
+        if (!storedPhone) {
+          const cachedData = localStorage.getItem('userOrderData');
+          if (cachedData) {
+            try {
+              const parsed = JSON.parse(cachedData);
+              storedPhone = parsed.phoneNumber;
+              userName = parsed.userName || '';
+              userEmail = parsed.userEmail || '';
+            } catch (e) {
+              // Error parsing cached user data - continue silently
+            }
+          }
+        }
+
+        if (storedPhone) {
+
+          // Store in sessionStorage as well for consistency
+          sessionStorage.setItem('userPhoneNumber', storedPhone);
+
+          // BACKEND TRIGGER: Sync phone number with backend
+          try {
+            const syncResponse = await api.post('/api/sync-phone-number', {
+              phoneNumber: storedPhone,
+              userName: userName,
+              userEmail: userEmail,
+              source: 'app_initialization'
+            });
+
+            if (syncResponse.data.success) {
+              // Phone number synced successfully
+            } else {
+              // Phone sync failed - continue silently
+            }
+          } catch (syncError) {
+            // Backend phone sync error - continue with local storage only
+          }
+        } else {
+          // No phone number found in storage on app initialization
+        }
+
+      } catch (error) {
+        console.error('❌ FRONTEND ERROR: Phone number fetch failed:', error);
+      }
+    };
+
+    fetchStoredPhoneNumber();
+  }, []);
+
   return (
     <Router>
       <Routes>
@@ -53,6 +119,7 @@ function App() {
         <Route path="/campus" element={<Layout><CampusSelection /></Layout>} />
 
         <Route path="/terms" element={<Layout><Terms /></Layout>} />
+        <Route path="/order-history" element={<Layout><OrderHistory /></Layout>} />
       </Routes>
     
     </Router>

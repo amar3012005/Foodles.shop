@@ -15,9 +15,7 @@ export const RestaurantStatusProvider = ({ children }) => {
     try {
       const response = await fetch(`${API_URL}/api/restaurants/status`);
       const data = await response.json();
-      
-      console.log('Pre-fetched restaurant statuses:', data);
-      
+
       if (data.statuses) {
         setStatuses(data.statuses);
         setLastCheck(data.metadata?.lastChecked);

@@ -23,10 +23,10 @@ export const requestNotificationPermission = async () => {
   try {
     const currentToken = await getToken(messaging, { vapidKey: 'YOUR_VAPID_KEY' });
     if (currentToken) {
-      console.log('FCM Token:', currentToken);
+      // FCM Token obtained successfully
       // You can send this token to your backend to target notifications to this user
     } else {
-      console.log('No registration token available. Request permission to generate one.');
+      // No registration token available. Request permission to generate one.
     }
   } catch (error) {
     console.error('Error getting token:', error);
@@ -36,7 +36,6 @@ export const requestNotificationPermission = async () => {
 // Handle foreground messages
 export const listenForForegroundMessages = () => {
   onMessage(messaging, (payload) => {
-    console.log('Message received: ', payload);
     // Handle the message here (e.g., show a notification, navigate, etc.)
   });
 };

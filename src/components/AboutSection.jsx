@@ -17,8 +17,8 @@ const AboutSection = () => {
       deliveryTime: "30-40",
       image: "/images/beta.jpeg",
       tags: ["North Indian", "Biryani", "Trending"],
-      vendorEmail: "yogeshthakur03839@gmail.com",
-      vendorPhone: "+918278803839",
+      vendorEmail: "b23313@students.iitmandi.ac.in",
+      vendorPhone: "+916301805656",
       operatingHours: {
         open: "00:00",  // 24/7
         close: "23:59"
@@ -176,7 +176,6 @@ const AboutSection = () => {
       try {
         const newUnlocked = e?.detail ?? JSON.parse(localStorage.getItem('unlockedRestaurants') || '[]');
         setUnlockedRestaurants(Array.isArray(newUnlocked) ? newUnlocked : []);
-        console.log('Unlocked restaurants updated from event:', newUnlocked);
       } catch (err) {
         console.error('Error handling unlock event:', err);
       }
@@ -187,7 +186,6 @@ const AboutSection = () => {
         try {
           const newUnlocked = JSON.parse(e.newValue || '[]');
           setUnlockedRestaurants(Array.isArray(newUnlocked) ? newUnlocked : []);
-          console.log('Unlocked restaurants updated from storage event:', newUnlocked);
         } catch (err) {
           console.error('Error parsing unlockedRestaurants from storage event:', err);
         }
@@ -244,7 +242,6 @@ const AboutSection = () => {
         
         // Use cached data if less than 10 seconds old
         if (age < 10000 && data.statuses) {
-          console.log('Using prefetched restaurant status');
           setRestaurants(prevRestaurants => 
             prevRestaurants.map(restaurant => ({
               ...restaurant,
@@ -268,7 +265,6 @@ const AboutSection = () => {
         setIsRefreshing(true);
         const response = await fetch('/api/restaurants/status/init');
         const data = await response.json();
-        console.log('Initial restaurant statuses:', data);
         
         if (data.statuses) {
           setRestaurants(prevRestaurants => 
@@ -300,16 +296,10 @@ const AboutSection = () => {
         const response = await fetch(`${API_URL}/api/restaurants/status`);
         const data = await response.json();
         
-        console.log('Restaurant status update:', {
-          data,
-          timestamp: new Date().toISOString()
-        });
-
         if (data.statuses) {
           setRestaurants(prevRestaurants => 
             prevRestaurants.map(restaurant => {
               const status = data.statuses[restaurant.id];
-              console.log(`Status for ${restaurant.name}:`, status);
               
               return {
                 ...restaurant,
@@ -366,7 +356,6 @@ const AboutSection = () => {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log('🟢 WebSocket Connected');
       setWsConnected(true);
       reconnectAttemptsRef.current = 0;
       if (reconnectTimerRef.current) {
@@ -378,14 +367,12 @@ const AboutSection = () => {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        console.log('📡 Received websocket data:', data);
 
         if (data.type === 'STATUS_UPDATE') {
           setRestaurants(prevRestaurants => 
             prevRestaurants.map(restaurant => {
               const change = data.changes.find(c => c.restaurantId === restaurant.id.toString());
               if (change) {
-                console.log(`Updating restaurant ${restaurant.id} status:`, change);
                 return {
                   ...restaurant,
                   isForceClose: change.newStatus !== '1',
@@ -413,7 +400,6 @@ const AboutSection = () => {
     };
 
     ws.onclose = (event) => {
-      console.log('WebSocket closed', { code: event?.code, reason: event?.reason });
       setWsConnected(false);
 
       if (manualCloseRef.current) return; // don't reconnect if intentionally closed
@@ -421,7 +407,6 @@ const AboutSection = () => {
       const attempts = reconnectAttemptsRef.current || 0;
       if (attempts < maxReconnectAttempts) {
         const timeout = Math.min(1000 * Math.pow(2, attempts), 10000);
-        console.log(`Reconnecting in ${timeout}ms (attempt ${attempts + 1})`);
         reconnectTimerRef.current = setTimeout(() => {
           reconnectAttemptsRef.current = (reconnectAttemptsRef.current || 0) + 1;
           connectWebSocket();
@@ -505,7 +490,6 @@ const AboutSection = () => {
   // Update the restaurant click handler to respect force close
   const handleRestaurantClick = (restaurant) => {
     if (restaurant.isForceClose) {
-      console.log('Restaurant is force closed:', restaurant.name);
       return;
     }
 
@@ -532,7 +516,6 @@ const AboutSection = () => {
           localStorage.setItem('unlockAttempts', JSON.stringify({ count: 0, timestamp: null }));
           
           // Show success message
-          console.log(`🎉 Test restaurant ${restaurant.name} unlocked!`);
           alert(`🎉 Test restaurant unlocked! You can now access ${restaurant.name}`);
           
           // Reset attempts
@@ -547,7 +530,6 @@ const AboutSection = () => {
       // Show progress message
       const remaining = (restaurant.unlockRequired || 5) - unlockAttempts.count - 1;
       if (remaining > 0) {
-        console.log(`🔒 Press "Order Now" ${remaining} more times to unlock ${restaurant.name}`);
         // Optional: Show a subtle hint to the user
       }
       return;
@@ -598,11 +580,6 @@ const AboutSection = () => {
 
   // Update the getStatusDisplay function to properly use isForceClose
   const getStatusDisplay = (restaurant) => {
-    console.log('Checking status for:', {
-      name: restaurant.name,
-      isForceClose: restaurant.isForceClose,
-      debug: restaurant.debug
-    });
 
     // Handle hidden restaurants
     if (restaurant.isHidden && !unlockedRestaurants.includes(restaurant.id)) {
