@@ -96,10 +96,10 @@ const FuturisticHomepage = () => {
   useEffect(() => {
     const prefetchRestaurantStatus = async () => {
       try {
-        const API_URL = process.env.REACT_APP_BACKEND_URL || 
+        const API_URL = process.env.REACT_APP_BACKEND_URL ||
           (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
             ? 'http://localhost:5000'  // Local development
-            : 'https://api.foodles.shop'); // Production backend
+            : 'https://foodles-backend.onrender.com'); // Production backend
 
         const response = await fetch(`${API_URL}/api/restaurants/status`);
         const data = await response.json();

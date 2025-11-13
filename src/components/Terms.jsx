@@ -30,11 +30,13 @@ const Terms = () => {
   };
 
   useEffect(() => {
+    console.log('Terms component mounted');
     document.title = 'Terms & Conditions';
 
     // Verify component mounted correctly
     const timer = setTimeout(() => {
       if (!document.querySelector('.terms-content')) {
+        console.log('Terms component failed to mount properly');
         navigate('/', { replace: true });
       }
     }, 1000);

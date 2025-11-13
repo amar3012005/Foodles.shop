@@ -34,6 +34,7 @@ function App() {
   useEffect(() => {
     const fetchStoredPhoneNumber = async () => {
       try {
+        console.log('🔄 FRONTEND TRIGGER: App initialization - fetching stored phone number');
 
         // Get phone number from localStorage
         let storedPhone = localStorage.getItem('userPhoneNumber');
@@ -54,18 +55,21 @@ function App() {
               storedPhone = parsed.phoneNumber;
               userName = parsed.userName || '';
               userEmail = parsed.userEmail || '';
+              console.log('📱 FRONTEND: Found phone number in cached user data:', storedPhone);
             } catch (e) {
-              // Error parsing cached user data - continue silently
+              console.log('❌ FRONTEND: Error parsing cached user data');
             }
           }
         }
 
         if (storedPhone) {
+          console.log('📱 FRONTEND: Phone number loaded from storage:', storedPhone);
 
           // Store in sessionStorage as well for consistency
           sessionStorage.setItem('userPhoneNumber', storedPhone);
 
           // BACKEND TRIGGER: Sync phone number with backend
+          console.log('🔄 FRONTEND TRIGGER: Initiating backend phone sync');
           try {
             const syncResponse = await api.post('/api/sync-phone-number', {
               phoneNumber: storedPhone,
@@ -75,17 +79,20 @@ function App() {
             });
 
             if (syncResponse.data.success) {
-              // Phone number synced successfully
+              console.log('✅ FRONTEND: Phone number synced with backend successfully');
+              console.log('🔄 BACKEND TRIGGER: Phone sync response:', syncResponse.data.backendTrigger);
             } else {
-              // Phone sync failed - continue silently
+              console.log('⚠️ FRONTEND: Phone sync failed:', syncResponse.data.error);
             }
           } catch (syncError) {
-            // Backend phone sync error - continue with local storage only
+            console.log('❌ FRONTEND: Backend phone sync error:', syncError.message);
+            console.log('� FRONTEND: Continuing with local storage only');
           }
         } else {
-          // No phone number found in storage on app initialization
+          console.log('�📱 FRONTEND: No phone number found in storage on app initialization');
         }
 
+        console.log('✅ FRONTEND TRIGGER: App initialization phone handling completed');
       } catch (error) {
         console.error('❌ FRONTEND ERROR: Phone number fetch failed:', error);
       }

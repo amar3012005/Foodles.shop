@@ -58,10 +58,10 @@ const AboutSection2 = () => {
   const manualCloseRef = useRef(false);
 
   // Add API endpoint config
-  const API_URL = process.env.REACT_APP_BACKEND_URL || 
+  const API_URL = process.env.REACT_APP_BACKEND_URL ||
     (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
       ? 'http://localhost:5000'  // Local development
-      : 'https://api.foodles.shop'); // Production backend
+      : 'https://foodles-backend.onrender.com'); // Production backend
 
   useEffect(() => {
     setIsLoaded(true);
@@ -180,11 +180,10 @@ const AboutSection2 = () => {
 
   // Modify WebSocket connection handling (use refs for attempts and timers)
   const connectWebSocket = useCallback(() => {
-    const wsUrl = process.env.REACT_APP_BACKEND_URL 
-      ? process.env.REACT_APP_BACKEND_URL.replace(/^http/, 'ws')
-      : (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-          ? 'ws://localhost:5000'
-          : 'wss://api.foodles.shop');
+    const wsUrl = process.env.REACT_APP_BACKEND_URL ||
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'ws://localhost:5000'  // Local development
+        : 'wss://foodles-backend.onrender.com'); // Production backend
 
     if (wsRef.current) {
       try {

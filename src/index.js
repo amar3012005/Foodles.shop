@@ -37,10 +37,10 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker
       .register('/service-worker.js')
       .then(registration => {
-        // SW registered successfully
+        console.log('SW registered:', registration);
       })
       .catch(error => {
-        // SW registration failed
+        console.log('SW registration failed:', error);
       });
   });
 }

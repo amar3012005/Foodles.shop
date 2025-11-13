@@ -62,6 +62,17 @@ const WaitingRoom = () => {
 
     const totalCharges = vendorCharge + dogDonation + (dogDonation > 0 ? 0 : convenienceFee);
 
+    console.log('Payment calculation:', {
+      subtotal,
+      vendorCharge,
+      dogDonation,
+      convenienceFee: dogDonation > 0 ? 0 : convenienceFee,
+      itemCount: totalItems,
+      totalCharges,
+      isPizzaBite: restaurantId === '5',
+      isPreReservation: isPreReservation || preReservationData?.isPreReservation
+    });
+
     return totalCharges;
   }, [restaurantId, preReservationData]);
 
@@ -108,6 +119,7 @@ const WaitingRoom = () => {
     const testConnection = async () => {
       try {
         const response = await api.get('/health');
+        console.log('✅ Backend connected');
         setBackendStatus('connected');
         setBackendError(false);
       } catch (error) {
@@ -158,6 +170,7 @@ const WaitingRoom = () => {
 
     try {
       setIsProcessingPayment(true);
+      console.log(`📦 Creating order: ${orderId} for ${restaurantName}`);
 
       // Store order ID in session storage for Cashfree response handling (already stored in useState)
       sessionStorage.setItem('lastOrderId', orderId); // Backup storage only
@@ -196,14 +209,17 @@ const WaitingRoom = () => {
       };
 
       localStorage.setItem(`order_${orderId}`, JSON.stringify(orderData));
+      console.log(`💾 Order data stored in localStorage`);
       
       // Store order ID in sessionStorage for order confirmation page fallback
       sessionStorage.setItem('lastOrderId', orderId);
+      console.log(`💾 Order ID stored in sessionStorage: ${orderId}`);
 
       // Save order data for processing after payment (Comment 13)
       let prepareResponse;
       try {
         prepareResponse = await api.post('/payment/prepare-order', orderData);
+        console.log(`🔄 Order prepared for payment processing`);
         
         // Validate prepare-order response before proceeding (Comment 1 - WaitingRoom)
         if (!prepareResponse.data || !prepareResponse.data.success) {
@@ -221,6 +237,7 @@ const WaitingRoom = () => {
       }
 
       // Create Razorpay order
+      console.log(`💳 Creating Razorpay order for amount: ₹${remainingPayment}`);
       const razorpayOrderResponse = await api.post('/payment/razorpay/create-order', {
         amount: remainingPayment,
         orderId: orderId,
@@ -232,6 +249,7 @@ const WaitingRoom = () => {
       }
 
       const { razorpayOrderId, key } = razorpayOrderResponse.data;
+      console.log(`✅ Razorpay order created: ${razorpayOrderId}`);
 
       // Load Razorpay checkout script if not already loaded
       if (!window.Razorpay) {
@@ -244,6 +262,7 @@ const WaitingRoom = () => {
           script.onload = resolve;
           script.onerror = reject;
         });
+        console.log(`✅ Razorpay script loaded`);
       }
 
       // Razorpay checkout options
@@ -268,9 +287,11 @@ const WaitingRoom = () => {
         },
         handler: async function (response) {
           // Payment successful
+          console.log('✅ Payment successful:', response);
           
           try {
             setIsProcessingPayment(true);
+            console.log(`🔐 Verifying payment on backend...`);
             
             // Verify payment on backend
             const verifyResponse = await api.post('/payment/razorpay/verify', {
@@ -282,6 +303,7 @@ const WaitingRoom = () => {
             });
 
             if (verifyResponse.data.success && verifyResponse.data.verified) {
+              console.log(`✅ Payment verified successfully`);
               // Redirect to confirmation page
               window.location.href = `/order-confirmation?order_id=${orderId}&payment_success=true`;
             } else {
@@ -295,6 +317,7 @@ const WaitingRoom = () => {
         },
         modal: {
           ondismiss: function() {
+            console.log('⚠️ Payment cancelled by user');
             setIsProcessingPayment(false);
             alert('Payment cancelled. Your order is still pending.');
           }

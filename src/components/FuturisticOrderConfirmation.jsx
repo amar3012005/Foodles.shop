@@ -41,6 +41,7 @@ const FuturisticOrderConfirmation = () => {
   // Reset retrigger flag when orderId changes (Comment 5)
   useEffect(() => {
     safetyRetriggerFlagRef.current = false;
+    console.log(`🔄 Reset safety retrigger flag for order: ${extractedOrderId}`);
   }, [extractedOrderId]);
 
   useEffect(() => {
@@ -50,13 +51,21 @@ const FuturisticOrderConfirmation = () => {
         setIsProcessingPayment(false);
         
         const orderIdToUse = orderIdFromUrl || extractedOrderId;
-
+        console.log(`🔍 Processing order confirmation for: ${orderIdToUse}`);
+        console.log(`📍 URL Parameters:`, {
+          orderIdFromUrl,
+          paymentIdFromUrl,
+          statusFromUrl,
+          paymentSuccessFlag,
+          extractedOrderId
+        });
+        
         if (!orderIdToUse) {
           console.error('❌ No order ID found');
           // Try to get from sessionStorage as fallback
           const fallbackOrderId = sessionStorage.getItem('lastOrderId');
           if (fallbackOrderId) {
-            // Found order ID in sessionStorage
+            console.log(`✅ Found order ID in sessionStorage: ${fallbackOrderId}`);
           }
         }
 
@@ -67,7 +76,8 @@ const FuturisticOrderConfirmation = () => {
           // Debug: Check all localStorage keys
           const allKeys = Object.keys(localStorage);
           const orderKeys = allKeys.filter(key => key.startsWith('order_'));
-
+          console.log(`📦 Found ${orderKeys.length} order(s) in localStorage`);
+          
           let cachedOrderData = null;
           
           if (localStorageKey) {
@@ -78,42 +88,53 @@ const FuturisticOrderConfirmation = () => {
           if (cachedOrderData) {
             // Parse and store in ref for retries (Comment 3, 10)
             parsedOrderDataRef.current = JSON.parse(cachedOrderData);
-
+            console.log(`✅ Order data loaded for: ${parsedOrderDataRef.current.userDetails?.fullName}`);
+            
             // Set state with the full orderData object (Comment 1)
             setOrderData(parsedOrderDataRef.current);
-
+            
             // DON'T clean up localStorage yet - defer until after notifications succeed (Comment 2)
+            console.log(`💾 localStorage retained for notification processing`);
           } else if (orderKeys.length > 0) {
             // Fallback: Use any available order key
+            console.log(`🔄 Using fallback order data`);
             const fallbackData = localStorage.getItem(orderKeys[0]);
             if (fallbackData) {
               parsedOrderDataRef.current = JSON.parse(fallbackData);
               localStorageKeyRef.current = orderKeys[0];
-
+              console.log(`✅ Fallback order data loaded`);
+              
               setOrderData(parsedOrderDataRef.current);
-
+              
               // DON'T clean up localStorage yet (Comment 2)
+              console.log(`💾 localStorage retained for notification processing`);
             }
           } else {
             console.warn('❌ No order data found in localStorage');
-          }          // Always trigger background processing for emails and notifications
+          }
+          
+          // Always trigger background processing for emails and notifications
           if (orderIdToUse && parsedOrderDataRef.current) {
-
+            console.log(`📧 Triggering email and notification processing with cached data`);
+            console.log(`💳 Payment success flag: ${paymentSuccessFlag}`);
+            
             let notificationSuccess = false;
-
+            
             // If user returned from payment gateway, assume payment is successful
             // This works around the lack of real-time payment verification
             if (paymentSuccessFlag === 'true') {
-              // User returned from payment gateway - proceeding with notifications
+              console.log(`✅ User returned from payment gateway - proceeding with notifications without verification`);
             }
-
+            
             // For order confirmation page, skip payment verification and proceed directly with notifications
             // since the user was already redirected here after successful payment
-
+            console.log(`📧 Proceeding with notifications for confirmed order: ${orderIdToUse}`);
+            
             // Trigger email notifications immediately after successful payment (Razorpay)
             try {
               setShowNotificationPopup(true);
-
+              console.log(`📧 Triggering email notifications for Razorpay payment...`);
+              
               // Check if payment was already verified (from Razorpay handler)
               const response = await api.post('/payment/razorpay/verify', {
                 razorpay_order_id: paymentIdFromUrl || 'order_confirmation_direct',
@@ -122,8 +143,13 @@ const FuturisticOrderConfirmation = () => {
                 orderId: orderIdToUse,
                 orderData: parsedOrderDataRef.current // Use ref instead of localStorage (Comment 3)
               });
-
+              
+              console.log(`✅ Email notification processing completed`);
+              
               if (response.data && response.data.success) {
+                console.log(`📧 Emails sent: ${response.data.emailsSent || 0}`);
+                console.log(`📞 Missed call: ${response.data.missedCallStatus || 'pending'}`);
+                
                 setEmailStatus({
                   emailsSent: response.data.emailsSent || 0,
                   emailErrors: response.data.emailErrors || []
@@ -135,8 +161,9 @@ const FuturisticOrderConfirmation = () => {
               }
             } catch (apiError) {
               console.error('❌ Email notification API error:', apiError.message);
-
+              
               // RETRY MECHANISM - Use ref data for retry (Comment 10)
+              console.log(`🔄 Retrying email notifications with cached ref data`);
               try {
                 const fallbackResponse = await api.post('/payment/razorpay/verify', {
                   razorpay_order_id: 'fallback_order',
@@ -145,8 +172,9 @@ const FuturisticOrderConfirmation = () => {
                   orderId: orderIdToUse,
                   orderData: parsedOrderDataRef.current // Use ref for retry (Comment 10)
                 });
-
+                
                 if (fallbackResponse.data && fallbackResponse.data.success) {
+                  console.log(`✅ Fallback email notification successful`);
                   setEmailStatus({
                     emailsSent: fallbackResponse.data.emailsSent || 0,
                     emailErrors: fallbackResponse.data.emailErrors || []
@@ -162,13 +190,15 @@ const FuturisticOrderConfirmation = () => {
               if (localStorageKeyRef.current) {
                 setTimeout(() => {
                   localStorage.removeItem(localStorageKeyRef.current);
+                  console.log(`🧹 localStorage cleaned after notification processing`);
                 }, 2000); // Small delay to ensure all requests complete
               }
-
+              
               // Cleanup sessionStorage lastOrderId after successful completion (Comment 6)
               if (notificationSuccess && sessionStorage.getItem('lastOrderId')) {
                 setTimeout(() => {
                   sessionStorage.removeItem('lastOrderId');
+                  console.log(`🧹 sessionStorage lastOrderId cleaned`);
                 }, 2000);
               }
             }
@@ -246,8 +276,9 @@ const FuturisticOrderConfirmation = () => {
           
           // SAFETY CHECK: If no emails sent after 10 seconds, trigger again using ref (Comment 5: Order-scoped flag)
           if (response.data.emailsSent === 0 && !safetyRetriggerFlagRef.current && parsedOrderDataRef.current) {
+            console.log(`🔄 No emails detected after polling, retriggering notifications via Razorpay`);
             safetyRetriggerFlagRef.current = true; // Prevent multiple retriggers for this order (Comment 5)
-
+            
             try {
               const retriggerResponse = await api.post('/payment/razorpay/verify', {
                 razorpay_order_id: 'safety_retrigger_order',
@@ -256,8 +287,9 @@ const FuturisticOrderConfirmation = () => {
                 orderId: orderIdToUse,
                 orderData: parsedOrderDataRef.current // Use ref instead of state (Comment 10)
               });
-
+              
               if (retriggerResponse.data && retriggerResponse.data.success) {
+                console.log(`✅ Safety retrigger successful: ${retriggerResponse.data.emailsSent} emails`);
                 setEmailStatus({
                   emailsSent: retriggerResponse.data.emailsSent || 0,
                   emailErrors: retriggerResponse.data.emailErrors || []

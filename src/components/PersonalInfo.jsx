@@ -121,8 +121,11 @@ const PersonalInfo = () => {
     localStorage.setItem('userPhoneNumber', userDetails.phoneNumber);
     localStorage.setItem('userOrderData', JSON.stringify(phoneData));
     sessionStorage.setItem('userPhoneNumber', userDetails.phoneNumber);
+    
+    console.log('💾 Saved user phone number to storage:', userDetails.phoneNumber);
 
     // BACKEND TRIGGER: Sync phone number with backend when NEXT is pressed
+    console.log('🔄 FRONTEND TRIGGER: Syncing phone number with backend on NEXT press');
     try {
       const syncResponse = await api.post('/api/sync-phone-number', {
         phoneNumber: userDetails.phoneNumber,
@@ -132,12 +135,14 @@ const PersonalInfo = () => {
       });
 
       if (syncResponse.data.success) {
-        // Phone number synced successfully
+        console.log('✅ FRONTEND: Phone number synced with backend on NEXT press');
+        console.log('🔄 BACKEND TRIGGER: Phone sync response:', syncResponse.data.backendTrigger);
       } else {
-        // Phone sync failed - continue with order flow
+        console.log('⚠️ FRONTEND: Phone sync failed on NEXT press:', syncResponse.data.error);
       }
     } catch (syncError) {
-      // Backend phone sync error - continue with order flow
+      console.log('❌ FRONTEND: Backend phone sync error on NEXT press:', syncError.message);
+      console.log('🔄 FRONTEND: Continuing with order flow despite sync failure');
     }
 
     // Navigate to the next page

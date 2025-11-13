@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import api from '../config/api';
+import API_BASE_URL from "../config";
 
 const ContactForm = ({ receiverEmail, orderDetails }) => {
     const [status, setStatus] = useState("Next");
@@ -15,15 +15,14 @@ const ContactForm = ({ receiverEmail, orderDetails }) => {
             receiverEmail: receiverEmail, // Use the provided receiverEmail prop
             orderDetails: orderDetails, // Include order details
         };
-        try {
-            const response = await api.post("/contact", details);
-            setStatus("Next");
-            alert(response.data.status);
-        } catch (error) {
-            console.error("Contact form error:", error);
-            alert("Failed to send message. Please try again.");
-            setStatus("Next");
-        }
+        let response = await fetch(`${API_BASE_URL}/contact`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json;charset=utf-8" },
+            body: JSON.stringify(details),
+        });
+        setStatus("Next");
+        let result = await response.json();
+        alert(result.status);
     };
 
     return (

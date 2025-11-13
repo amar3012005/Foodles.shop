@@ -1,5 +1,4 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
-import api from '../config/api';
 
 const RestaurantStatusContext = createContext();
 
@@ -8,11 +7,18 @@ export const RestaurantStatusProvider = ({ children }) => {
   const [lastCheck, setLastCheck] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const API_URL = process.env.REACT_APP_BACKEND_URL ||
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      ? 'http://localhost:5000'  // Local development
+      : 'https://foodles-backend.onrender.com'); // Production backend
+
   const fetchStatuses = useCallback(async () => {
     try {
-      const response = await api.get('/api/restaurants/status');
-      const data = response.data;
-
+      const response = await fetch(`${API_URL}/api/restaurants/status`);
+      const data = await response.json();
+      
+      console.log('Pre-fetched restaurant statuses:', data);
+      
       if (data.statuses) {
         setStatuses(data.statuses);
         setLastCheck(data.metadata?.lastChecked);
@@ -22,7 +28,7 @@ export const RestaurantStatusProvider = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [API_URL]);
 
   useEffect(() => {
     fetchStatuses();
@@ -31,11 +37,11 @@ export const RestaurantStatusProvider = ({ children }) => {
   }, [fetchStatuses]);
 
   return (
-    <RestaurantStatusContext.Provider value={{
-      statuses,
-      lastCheck,
+    <RestaurantStatusContext.Provider value={{ 
+      statuses, 
+      lastCheck, 
       isLoading,
-      refreshStatuses: fetchStatuses
+      refreshStatuses: fetchStatuses 
     }}>
       {children}
     </RestaurantStatusContext.Provider>

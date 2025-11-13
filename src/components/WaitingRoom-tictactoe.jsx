@@ -47,6 +47,15 @@ const WaitingRoom = () => {
 
     const totalCharges = vendorCharge + dogDonation + convenienceFee;
 
+    console.log('Payment calculation:', {
+      subtotal,
+      vendorCharge,
+      dogDonation,
+      convenienceFee,
+      itemCount: totalItems,
+      totalCharges
+    });
+
     return totalCharges;
   };
 
@@ -103,6 +112,7 @@ const WaitingRoom = () => {
     const testConnection = async () => {
       try {
         const response = await api.get('/health');
+        console.log('Backend connection:', response.data);
         setBackendStatus('connected');
         setBackendError(false);
       } catch (error) {
@@ -212,7 +222,8 @@ const WaitingRoom = () => {
       const orderResponse = await api.post('/payment/create-order', { 
         amount: remainingPayment 
       });
-
+      
+      console.log('Order created:', orderResponse.data);
       const razorpayKey = await fetchRazorpayKey();
 
       const options = {

@@ -61,6 +61,8 @@ const Menu = () => {
 
   const { vendorEmail, vendorPhone, restaurantName } = location.state || {};
 
+  console.log("Menu component rendered");
+
   // Check for pre-reservation
   useEffect(() => {
     const urlParams = new URLSearchParams(location.search);
@@ -85,7 +87,8 @@ const Menu = () => {
 
     const loadRestaurantData = async () => {
       try {
-
+        console.log('Loading restaurant data for ID:', restaurantId);
+        
         // Update restaurant info to match AboutSection names
         const restaurantData = {
           1: { name: "BABAJI_FOOD-POINT", image: "/images/alpha.jpeg" },
@@ -126,6 +129,7 @@ const Menu = () => {
           },
           complete: (results) => {
             if (results.data && results.data.length > 0) {
+              console.log('Parsed menu data:', results.data);
               setMenuItems(results.data.map(item => ({
                 ...item,
                 price: parseFloat(item.price) || 0,
@@ -208,7 +212,7 @@ const Menu = () => {
   // Add debug logging for trending items
   useEffect(() => {
     if (isLoaded) {
-      // Trending items loaded successfully
+      console.log('Trending items for restaurant:', restaurantId, trendingItems);
     }
   }, [isLoaded, restaurantId, trendingItems]);
 
