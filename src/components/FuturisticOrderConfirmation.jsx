@@ -59,6 +59,8 @@ const FuturisticOrderConfirmation = () => {
           paymentSuccessFlag,
           extractedOrderId
         });
+        console.log(`🌐 Current location:`, window.location.href);
+        console.log(`🔗 Full URL:`, window.location.href);
         
         if (!orderIdToUse) {
           console.error('❌ No order ID found');
@@ -88,29 +90,63 @@ const FuturisticOrderConfirmation = () => {
           if (cachedOrderData) {
             // Parse and store in ref for retries (Comment 3, 10)
             parsedOrderDataRef.current = JSON.parse(cachedOrderData);
-            console.log(`✅ Order data loaded for: ${parsedOrderDataRef.current.userDetails?.fullName}`);
+            console.log(`✅ Order data loaded from localStorage for: ${parsedOrderDataRef.current.userDetails?.fullName}`);
             
             // Set state with the full orderData object (Comment 1)
             setOrderData(parsedOrderDataRef.current);
-            
-            // DON'T clean up localStorage yet - defer until after notifications succeed (Comment 2)
-            console.log(`💾 localStorage retained for notification processing`);
-          } else if (orderKeys.length > 0) {
-            // Fallback: Use any available order key
-            console.log(`🔄 Using fallback order data`);
-            const fallbackData = localStorage.getItem(orderKeys[0]);
-            if (fallbackData) {
-              parsedOrderDataRef.current = JSON.parse(fallbackData);
-              localStorageKeyRef.current = orderKeys[0];
-              console.log(`✅ Fallback order data loaded`);
-              
-              setOrderData(parsedOrderDataRef.current);
-              
-              // DON'T clean up localStorage yet (Comment 2)
-              console.log(`💾 localStorage retained for notification processing`);
-            }
           } else {
-            console.warn('❌ No order data found in localStorage');
+            console.log(`⚠️ No order data in localStorage, trying to fetch from backend`);
+            
+            // Try to fetch order data from backend as fallback
+            try {
+              const orderResponse = await api.get(`/orders/${orderIdToUse}`);
+              if (orderResponse.data && orderResponse.data.success) {
+                const backendOrderData = orderResponse.data.order;
+                console.log(`✅ Order data fetched from backend for: ${backendOrderData.userDetails?.fullName}`);
+                
+                // Store in ref for processing
+                parsedOrderDataRef.current = {
+                  orderId: backendOrderData.orderId,
+                  userDetails: backendOrderData.userDetails,
+                  orderDetails: backendOrderData.orderDetails,
+                  vendorEmail: '', // Will be looked up by restaurant ID
+                  vendorPhone: backendOrderData.orderDetails.vendorPhone || '',
+                  restaurantId: backendOrderData.restaurantId,
+                  restaurantName: backendOrderData.restaurantName,
+                  amount: backendOrderData.amount,
+                  totalOrderValue: backendOrderData.totalOrderValue,
+                  paymentBreakdown: {
+                    remainingPayment: backendOrderData.orderDetails.remainingPayment || backendOrderData.amount
+                  },
+                  timestamp: Date.now(),
+                  paymentStatus: backendOrderData.paymentStatus
+                };
+                
+                setOrderData(parsedOrderDataRef.current);
+              } else {
+                console.warn(`❌ Could not fetch order data from backend`);
+              }
+            } catch (backendError) {
+              console.error(`❌ Backend fetch failed:`, backendError.message);
+              
+              // Final fallback: Use any available order key
+              if (orderKeys.length > 0) {
+                console.log(`🔄 Using fallback order data from localStorage`);
+                const fallbackData = localStorage.getItem(orderKeys[0]);
+                if (fallbackData) {
+                  parsedOrderDataRef.current = JSON.parse(fallbackData);
+                  localStorageKeyRef.current = orderKeys[0];
+                  console.log(`✅ Fallback order data loaded`);
+                  
+                  setOrderData(parsedOrderDataRef.current);
+                }
+              }
+            }
+          }
+          
+          // DON'T clean up localStorage yet - defer until after notifications succeed (Comment 2)
+          if (parsedOrderDataRef.current) {
+            console.log(`💾 Order data available for notification processing`);
           }
           
           // Always trigger background processing for emails and notifications
@@ -120,87 +156,99 @@ const FuturisticOrderConfirmation = () => {
             
             let notificationSuccess = false;
             
-            // If user returned from payment gateway, assume payment is successful
-            // This works around the lack of real-time payment verification
-            if (paymentSuccessFlag === 'true') {
-              console.log(`✅ User returned from payment gateway - proceeding with notifications without verification`);
-            }
-            
-            // For order confirmation page, skip payment verification and proceed directly with notifications
-            // since the user was already redirected here after successful payment
-            console.log(`📧 Proceeding with notifications for confirmed order: ${orderIdToUse}`);
-            
-            // Trigger email notifications immediately after successful payment (Razorpay)
+            // Check if order was already processed first (regardless of payment success flag)
             try {
-              setShowNotificationPopup(true);
-              console.log(`📧 Triggering email notifications for Razorpay payment...`);
-              
-              // Check if payment was already verified (from Razorpay handler)
-              const response = await api.post('/payment/razorpay/verify', {
-                razorpay_order_id: paymentIdFromUrl || 'order_confirmation_direct',
-                razorpay_payment_id: paymentIdFromUrl || 'payment_confirmation_direct',
-                razorpay_signature: 'confirmation_page_trigger', // Placeholder for direct confirmation
-                orderId: orderIdToUse,
-                orderData: parsedOrderDataRef.current // Use ref instead of localStorage (Comment 3)
-              });
-              
-              console.log(`✅ Email notification processing completed`);
-              
-              if (response.data && response.data.success) {
-                console.log(`📧 Emails sent: ${response.data.emailsSent || 0}`);
-                console.log(`📞 Missed call: ${response.data.missedCallStatus || 'pending'}`);
-                
+              const statusResponse = await api.get(`/email-status/${orderIdToUse}`);
+              if (statusResponse.data && statusResponse.data.emailsSent > 0) {
+                console.log(`✅ Order already processed: ${statusResponse.data.emailsSent} emails sent`);
                 setEmailStatus({
-                  emailsSent: response.data.emailsSent || 0,
-                  emailErrors: response.data.emailErrors || []
+                  emailsSent: statusResponse.data.emailsSent,
+                  emailErrors: statusResponse.data.emailErrors || []
                 });
-                setMissedCallStatus(response.data.missedCallStatus);
+                setMissedCallStatus(statusResponse.data.missedCallStatus);
+                setShowNotificationPopup(true);
                 notificationSuccess = true;
               } else {
-                console.warn('⚠️ Notification processing response incomplete');
+                console.log(`⚠️ Order not yet processed, will trigger notifications`);
               }
-            } catch (apiError) {
-              console.error('❌ Email notification API error:', apiError.message);
-              
-              // RETRY MECHANISM - Use ref data for retry (Comment 10)
-              console.log(`🔄 Retrying email notifications with cached ref data`);
-              try {
-                const fallbackResponse = await api.post('/payment/razorpay/verify', {
-                  razorpay_order_id: 'fallback_order',
-                  razorpay_payment_id: 'fallback_payment',
-                  razorpay_signature: 'fallback_signature',
-                  orderId: orderIdToUse,
-                  orderData: parsedOrderDataRef.current // Use ref for retry (Comment 10)
-                });
+            } catch (statusError) {
+              console.log(`⚠️ Could not check order status: ${statusError.message}`);
+            }
+            
+            // If order not yet processed, OR if payment_success=true (force trigger), trigger notifications
+            if (!notificationSuccess || paymentSuccessFlag === 'true') {
+              console.log(`🚀 Triggering notifications for order ${orderIdToUse} (force: ${paymentSuccessFlag === 'true'})`);
+                setShowNotificationPopup(true);
+                console.log(`📧 Triggering email notifications for order...`);
                 
-                if (fallbackResponse.data && fallbackResponse.data.success) {
-                  console.log(`✅ Fallback email notification successful`);
-                  setEmailStatus({
-                    emailsSent: fallbackResponse.data.emailsSent || 0,
-                    emailErrors: fallbackResponse.data.emailErrors || []
+                // Use the new endpoint to trigger notifications
+                try {
+                  const response = await api.post('/payment/trigger-notifications', {
+                    orderId: orderIdToUse,
+                    orderData: parsedOrderDataRef.current
                   });
-                  setMissedCallStatus(fallbackResponse.data.missedCallStatus);
-                  notificationSuccess = true;
-                }
-              } catch (fallbackError) {
-                console.error('❌ Fallback email notification also failed:', fallbackError.message);
+                  
+                  console.log(`✅ Notification processing completed`);
+                  
+                  if (response.data && response.data.success) {
+                    console.log(`📧 Emails sent: ${response.data.emailsSent || 0}`);
+                    console.log(`📞 Missed call: ${response.data.missedCallStatus || 'pending'}`);
+                    
+                    setEmailStatus({
+                      emailsSent: response.data.emailsSent || 0,
+                      emailErrors: response.data.emailErrors || []
+                    });
+                    setMissedCallStatus(response.data.missedCallStatus);
+                    notificationSuccess = true;
+                  } else {
+                    console.warn('⚠️ Notification processing response incomplete');
+                    // Still show popup even if response is incomplete
+                    setShowNotificationPopup(true);
+                  }
+                } catch (apiError) {
+                console.error('❌ Notification API error:', apiError.message);
+                
+                // Show popup anyway to indicate processing attempted
+                setShowNotificationPopup(true);
+                
+                // RETRY MECHANISM - Try again after a delay
+                setTimeout(async () => {
+                  try {
+                    console.log(`� Retrying notification processing...`);
+                    const retryResponse = await api.post('/payment/trigger-notifications', {
+                      orderId: orderIdToUse,
+                      orderData: parsedOrderDataRef.current
+                    });
+                    
+                    if (retryResponse.data && retryResponse.data.success) {
+                      console.log(`✅ Retry successful: ${retryResponse.data.emailsSent} emails`);
+                      setEmailStatus({
+                        emailsSent: retryResponse.data.emailsSent || 0,
+                        emailErrors: retryResponse.data.emailErrors || []
+                      });
+                      setMissedCallStatus(retryResponse.data.missedCallStatus);
+                    }
+                  } catch (retryError) {
+                    console.error('❌ Retry also failed:', retryError.message);
+                  }
+                }, 3000); // Retry after 3 seconds
               }
-            } finally {
-              // Only cleanup localStorage after notification attempts complete (Comment 2)
-              if (localStorageKeyRef.current) {
-                setTimeout(() => {
-                  localStorage.removeItem(localStorageKeyRef.current);
-                  console.log(`🧹 localStorage cleaned after notification processing`);
-                }, 2000); // Small delay to ensure all requests complete
-              }
-              
-              // Cleanup sessionStorage lastOrderId after successful completion (Comment 6)
-              if (notificationSuccess && sessionStorage.getItem('lastOrderId')) {
-                setTimeout(() => {
-                  sessionStorage.removeItem('lastOrderId');
-                  console.log(`🧹 sessionStorage lastOrderId cleaned`);
-                }, 2000);
-              }
+            }
+            
+            // Only cleanup localStorage after notification attempts complete (Comment 2)
+            if (localStorageKeyRef.current) {
+              setTimeout(() => {
+                localStorage.removeItem(localStorageKeyRef.current);
+                console.log(`🧹 localStorage cleaned after notification processing`);
+              }, 2000); // Small delay to ensure all requests complete
+            }
+            
+            // Cleanup sessionStorage lastOrderId after successful completion (Comment 6)
+            if (notificationSuccess && sessionStorage.getItem('lastOrderId')) {
+              setTimeout(() => {
+                sessionStorage.removeItem('lastOrderId');
+                console.log(`🧹 sessionStorage lastOrderId cleaned`);
+              }, 2000);
             }
           }
           
@@ -211,7 +259,7 @@ const FuturisticOrderConfirmation = () => {
     };
 
     processPaymentAndLoadData();
-  }, []); // Run only once
+  }, []); // Run only once - eslint-disable-line react-hooks/exhaustive-deps
 
   // Consolidate scroll locking into single mount/unmount effect (Comment 17)
   useEffect(() => {
