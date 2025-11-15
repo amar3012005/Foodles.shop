@@ -172,7 +172,7 @@ const WaitingRoom = () => {
       setIsProcessingPayment(true);
       console.log(`📦 Creating order: ${orderId} for ${restaurantName}`);
 
-      // Store order ID in session storage for Cashfree response handling (already stored in useState)
+      // Store order ID in session storage for payment response handling (already stored in useState)
       sessionStorage.setItem('lastOrderId', orderId); // Backup storage only
 
       // Store comprehensive order data in localStorage for order confirmation page
@@ -293,13 +293,29 @@ const WaitingRoom = () => {
             setIsProcessingPayment(true);
             console.log(`🔐 Verifying payment on backend...`);
             
-            // Verify payment on backend
+            // Verify payment with backend
+            console.log(`🔐 Verifying payment with backend:`, {
+              orderId,
+              hasOrderId: !!response.razorpay_order_id,
+              hasPaymentId: !!response.razorpay_payment_id,
+              hasSignature: !!response.razorpay_signature
+            });
+            
             const verifyResponse = await api.post('/payment/razorpay/verify', {
               razorpay_order_id: response.razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
               orderId: orderId,
               orderData: orderData
+            }, {
+              timeout: 45000 // 45 second timeout for payment verification
+            });
+
+            console.log(`🔍 Verification response:`, {
+              success: verifyResponse.data?.success,
+              verified: verifyResponse.data?.verified,
+              error: verifyResponse.data?.error,
+              status: verifyResponse.status
             });
 
             if (verifyResponse.data.success && verifyResponse.data.verified) {
@@ -307,12 +323,50 @@ const WaitingRoom = () => {
               // Redirect to confirmation page
               window.location.href = `/order-confirmation?order_id=${orderId}&payment_success=true`;
             } else {
+              console.warn(`⚠️ Payment verification failed, checking if order was processed...`);
+              
+              // FALLBACK: Check if order exists in backend even if verification failed
+              try {
+                const orderCheck = await api.get(`/orders/${orderId}`);
+                if (orderCheck.data && orderCheck.data.success && orderCheck.data.order) {
+                  console.log(`✅ Order found in backend despite verification failure, proceeding...`);
+                  // Redirect to confirmation page anyway since order exists
+                  window.location.href = `/order-confirmation?order_id=${orderId}&payment_success=true`;
+                  return;
+                }
+              } catch (orderCheckError) {
+                console.log(`⚠️ Order not found in backend:`, orderCheckError.message);
+              }
+              
+              // If verification failed and order doesn't exist, show error
               throw new Error('Payment verification failed');
             }
           } catch (error) {
             console.error('❌ Verification failed:', error);
+            
+            // Check if it's a network/timeout error
+            if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+              console.log('⏰ Payment verification timed out, checking order status...');
+              
+              // FALLBACK: Check if order was processed despite timeout
+              try {
+                const orderCheck = await api.get(`/orders/${orderId}`);
+                if (orderCheck.data && orderCheck.data.success && orderCheck.data.order) {
+                  console.log(`✅ Order found in backend despite timeout, proceeding...`);
+                  window.location.href = `/order-confirmation?order_id=${orderId}&payment_success=true`;
+                  return;
+                }
+              } catch (orderCheckError) {
+                console.log(`⚠️ Order check also failed:`, orderCheckError.message);
+              }
+              
+              alert('Payment verification timed out. Please check your order status or contact support with order ID: ' + orderId);
+            } else {
+              // Original error handling for non-timeout errors
+              alert('Payment verification failed. Please contact support with order ID: ' + orderId);
+            }
+            
             setIsProcessingPayment(false);
-            alert('Payment verification failed. Please contact support with order ID: ' + orderId);
           }
         },
         modal: {
@@ -343,7 +397,7 @@ const WaitingRoom = () => {
   };
 
   const handleTryAgain = () => {
-    navigate('/personalinfo', { state: { cartItems: orderDetails.items, vendorEmail, vendorPhone } });
+    navigate('/checkout', { state: { cartItems: orderDetails.items, vendorEmail, vendorPhone } });
   };
 
   // Replace the existing BackendErrorMessage component

@@ -13,7 +13,6 @@ import Checkout from './components/Checkout';
 import WaitingRoom from './components/WaitingRoom';
 import PersonalInfo from './components/PersonalInfo';
 import FuturisticOrderConfirmation from './components/FuturisticOrderConfirmation';
-import CashfreeResponse from './components/CashfreeResponse';
 import Terms from './components/Terms';
 import CampusSelection from './components/campus';
 import OrderHistory from './components/OrderHistory';
@@ -115,12 +114,6 @@ function App() {
         <Route path="/personal-info" element={<Layout><PersonalInfo /></Layout>} />
         <Route path="/waiting-room" element={<Layout><WaitingRoom /></Layout>} />
         <Route path="/order-confirmation" element={<Layout><FuturisticOrderConfirmation /></Layout>} />
-        
-        {/* Cashfree response handlers - multiple patterns to catch different response formats */}
-        <Route path="/forms/response/:responseToken" element={<CashfreeResponse />} />
-        <Route path="/forms/response/*" element={<CashfreeResponse />} />
-        <Route path="/cashfree-response" element={<CashfreeResponse />} />
-        <Route path="/payment-success" element={<CashfreeResponse />} />
         
         <Route path="/underprogress" element={<UnderProgress />} />
         <Route path="/campus" element={<Layout><CampusSelection /></Layout>} />
